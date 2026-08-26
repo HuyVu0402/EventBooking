@@ -1,0 +1,718 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Event Booking Mini App",
+    "description": "Mini-app dat ve su kien tich hop Super App. Cac endpoint co OpenAPI metadata de Agent co the tim kiem, uoc tinh gia, dat ve va huy ve.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Kiểm tra trạng thái mini-app đặt vé sự kiện",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "low",
+        "x-side-effect-type": "read",
+        "x-timeout-ms": 3000
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Tìm sự kiện phù hợp để người dùng xem và chọn vé",
+        "description": "Dùng endpoint này khi người dùng muốn tìm sự kiện theo thành phố, từ khóa, danh mục, ngày hoặc ngân sách.",
+        "operationId": "search_events",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Thành phố tổ chức sự kiện (VD: Hà Nội, TP. Hồ Chí Minh, Đà Nẵng)",
+              "title": "City"
+            },
+            "description": "Thành phố tổ chức sự kiện (VD: Hà Nội, TP. Hồ Chí Minh, Đà Nẵng)"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Từ khóa tên hoặc nội dung sự kiện",
+              "title": "Keyword"
+            },
+            "description": "Từ khóa tên hoặc nội dung sự kiện"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo",
+              "title": "Category"
+            },
+            "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ngày bắt đầu tìm kiếm sự kiện",
+              "title": "Start Date"
+            },
+            "description": "Ngày bắt đầu tìm kiếm sự kiện"
+          },
+          {
+            "name": "max_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Giá vé tối đa theo VNĐ",
+              "title": "Max Price"
+            },
+            "description": "Giá vé tối đa theo VNĐ"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Search Events"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "low",
+        "x-side-effect-type": "read",
+        "x-retry-policy": "safe_retry",
+        "x-deep-link-template": "https://eventbooking-i19e.onrender.com/"
+      }
+    },
+    "/events/{event_id}": {
+      "get": {
+        "summary": "Xem chi tiết một sự kiện trước khi đặt vé",
+        "description": "Dùng endpoint này khi người dùng đã chọn hoặc nhắc tới mã sự kiện và muốn xem chi tiết.",
+        "operationId": "get_event_detail",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã sự kiện cần xem chi tiết",
+              "title": "Event Id"
+            },
+            "description": "Mã sự kiện cần xem chi tiết"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Event Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "low",
+        "x-side-effect-type": "read",
+        "x-retry-policy": "safe_retry"
+      }
+    },
+    "/tickets/estimate": {
+      "get": {
+        "summary": "Ước tính tổng tiền vé trước khi đặt",
+        "description": "Dùng endpoint này để báo giá vé dự kiến trước khi người dùng xác nhận đặt vé.",
+        "operationId": "estimate_ticket_price",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã sự kiện cần ước tính giá vé",
+              "title": "Event Id"
+            },
+            "description": "Mã sự kiện cần ước tính giá vé"
+          },
+          {
+            "name": "ticket_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "standard",
+                "vip",
+                "student"
+              ],
+              "type": "string",
+              "description": "Loại vé. Giá trị hợp lệ: standard | vip | student",
+              "default": "standard",
+              "title": "Ticket Type"
+            },
+            "description": "Loại vé. Giá trị hợp lệ: standard | vip | student"
+          },
+          {
+            "name": "quantity",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "description": "Số lượng vé cần đặt",
+              "title": "Quantity"
+            },
+            "description": "Số lượng vé cần đặt"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Estimate Ticket Price"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "low",
+        "x-side-effect-type": "read",
+        "x-retry-policy": "safe_retry"
+      }
+    },
+    "/bookings": {
+      "post": {
+        "summary": "Đặt vé sự kiện sau khi người dùng xác nhận",
+        "description": "Dùng endpoint này khi người dùng đã chọn sự kiện, loại vé, số lượng và muốn đặt vé.",
+        "operationId": "create_event_booking",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Event Booking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "high",
+        "x-side-effect-type": "mutation",
+        "x-requires-hitl": true,
+        "x-idempotency-required": true,
+        "x-retry-policy": "no_retry",
+        "x-action-url-field": "data.checkout_url",
+        "x-deep-link-template": "https://eventbooking-i19e.onrender.com/checkout/{booking_id}"
+      }
+    },
+    "/bookings/{booking_id}": {
+      "get": {
+        "summary": "Kiểm tra trạng thái đơn đặt vé",
+        "description": "Dùng endpoint này khi người dùng hỏi trạng thái thanh toán hoặc thông tin đơn vé đã đặt.",
+        "operationId": "get_booking_status",
+        "parameters": [
+          {
+            "name": "booking_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã đơn đặt vé cần kiểm tra",
+              "title": "Booking Id"
+            },
+            "description": "Mã đơn đặt vé cần kiểm tra"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Booking Status"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "low",
+        "x-side-effect-type": "read",
+        "x-retry-policy": "safe_retry"
+      }
+    },
+    "/bookings/{booking_id}/cancel": {
+      "post": {
+        "summary": "Hủy đơn đặt vé sau khi người dùng xác nhận",
+        "description": "Dùng endpoint này khi người dùng muốn hủy đơn đặt vé đã tạo.",
+        "operationId": "cancel_event_booking",
+        "parameters": [
+          {
+            "name": "booking_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã đơn đặt vé cần hủy",
+              "title": "Booking Id"
+            },
+            "description": "Mã đơn đặt vé cần hủy"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancel Event Booking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-risk-level": "high",
+        "x-side-effect-type": "mutation",
+        "x-requires-hitl": true,
+        "x-idempotency-required": true,
+        "x-retry-policy": "no_retry"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BookingRequest": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Mã sự kiện cần đặt vé"
+          },
+          "ticket_type": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "vip",
+              "student"
+            ],
+            "title": "Ticket Type",
+            "description": "Loại vé. Giá trị hợp lệ: standard | vip | student",
+            "default": "standard"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "description": "Số lượng vé cần đặt"
+          },
+          "attendee_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Attendee Name",
+            "description": "Họ tên người tham dự"
+          },
+          "attendee_email": {
+            "type": "string",
+            "title": "Attendee Email",
+            "description": "Email nhận vé điện tử"
+          },
+          "attendee_phone": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 8,
+            "title": "Attendee Phone",
+            "description": "Số điện thoại liên hệ"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Ghi chú thêm cho ban tổ chức"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Customer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hồ sơ khách hàng do Super App tự đính kèm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "quantity",
+          "attendee_name",
+          "attendee_email",
+          "attendee_phone"
+        ],
+        "title": "BookingRequest"
+      },
+      "CancelBookingRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Lý do hủy vé"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Customer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hồ sơ khách hàng do Super App tự đính kèm"
+          }
+        },
+        "type": "object",
+        "title": "CancelBookingRequest"
+      },
+      "Customer": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name",
+            "description": "Tên khách hàng từ Super App"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "Email khách hàng từ Super App"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "Tên đăng nhập khách hàng từ Super App"
+          }
+        },
+        "type": "object",
+        "title": "Customer"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://eventbooking-i19e.onrender.com"
+    }
+  ]
+}
