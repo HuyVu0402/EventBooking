@@ -40,6 +40,7 @@ app.add_middleware(
 class PartnerEnvelope(BaseModel):
     status: Literal["success", "error"]
     message: str
+    operation_id: str | None = None
     data: dict[str, Any] | None = None
     code: str | None = None
 
@@ -83,8 +84,14 @@ class CancelBookingRequest(BaseModel):
     customer: Customer | None = Field(None, description="Hồ sơ khách hàng do Super App tự đính kèm")
 
 
-def success(data: dict[str, Any], message: str) -> dict[str, Any]:
-    return PartnerEnvelope(status="success", message=message, data=data).model_dump(exclude_none=True)
+def success(data: dict[str, Any], message: str, operation_id: str | None = None) -> dict[str, Any]:
+    operation_id = operation_id or f"event-operation-{uuid4().hex[:12].upper()}"
+    return PartnerEnvelope(
+        status="success",
+        message=message,
+        operation_id=operation_id,
+        data=data,
+    ).model_dump(exclude_none=True)
 
 
 def business_error(message: str, code: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -398,7 +405,11 @@ async def create_booking(
     }
     BOOKINGS[booking_id] = booking
     event["remaining_tickets"] -= payload.quantity
-    response = success(booking, "Đặt vé thành công, vui lòng mở link thanh toán để hoàn tất")
+    response = success(
+        booking,
+        "Đặt vé thành công, vui lòng mở link thanh toán để hoàn tất",
+        operation_id=f"booking-{booking_id}",
+    )
     IDEMPOTENCY_RESULTS[idempotency_key] = response
     return response
 
@@ -449,7 +460,7 @@ async def cancel_booking(
     if not booking:
         return business_error("Không tìm thấy đơn đặt vé", "BOOKING_NOT_FOUND", {"booking_id": booking_id})
     if booking["status"] == "CANCELLED":
-        response = success({"booking": booking}, "Đơn vé đã được hủy trước đó")
+        response = success({"booking": booking}, "Đơn vé đã được hủy trước đó", operation_id=f"booking-{booking_id}")
         IDEMPOTENCY_RESULTS[idem_key] = response
         return response
 
@@ -457,6 +468,6 @@ async def cancel_booking(
     booking["cancel_reason"] = payload.reason
     booking["cancelled_at"] = datetime.now(timezone.utc).isoformat()
     EVENTS[booking["event_id"]]["remaining_tickets"] += booking["quantity"]
-    response = success({"booking": booking}, "Hủy đơn đặt vé thành công")
+    response = success({"booking": booking}, "Hủy đơn đặt vé thành công", operation_id=f"booking-{booking_id}")
     IDEMPOTENCY_RESULTS[idem_key] = response
     return response
