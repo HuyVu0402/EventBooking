@@ -10,15 +10,21 @@ def test_callback_headers_use_env_credential_and_canonical_signature(monkeypatch
     monkeypatch.setattr(main, "SUPERAPP_APP_ID", "app_event_booking_test")
     monkeypatch.setattr(main, "SUPERAPP_KEY_ID", "key_event_booking_test")
     monkeypatch.setattr(main, "SUPERAPP_API_KEY", "sa_sandbox_test-secret")
-    monkeypatch.setattr(main, "SUPERAPP_WEBHOOK_URL", "http://platform.test/api/v1/webhooks/ride-status")
+    monkeypatch.setattr(main, "SUPERAPP_WEBHOOK_URL", "http://platform.test/api/v1/webhooks/event-status")
 
-    body = {"service_code": "EVENT_BOOKING", "booking_id": "EVB-1", "status": "PENDING_PAYMENT"}
+    body = {
+        "service_code": "EVENT_BOOKING",
+        "operation_id": "event-booking-create-evb-1",
+        "booking_id": "EVB-1",
+        "event_id": "EVT-HN-AI-2026",
+        "status": "PENDING_PAYMENT",
+    }
     headers = main.build_superapp_callback_headers(body, nonce="nonce-1", timestamp="1700000000")
     signed_payload = build_request_signature_payload(
         app_id="app_event_booking_test",
         key_id="key_event_booking_test",
         method="POST",
-        path="/api/v1/webhooks/ride-status",
+        path="/api/v1/webhooks/event-status",
         timestamp="1700000000",
         nonce="nonce-1",
         body=body,
@@ -52,7 +58,7 @@ async def test_notify_superapp_posts_signed_callback(monkeypatch):
     monkeypatch.setattr(main, "SUPERAPP_APP_ID", "app_event_booking_test")
     monkeypatch.setattr(main, "SUPERAPP_KEY_ID", "key_event_booking_test")
     monkeypatch.setattr(main, "SUPERAPP_API_KEY", "sa_sandbox_test-secret")
-    monkeypatch.setattr(main, "SUPERAPP_WEBHOOK_URL", "http://platform.test/api/v1/webhooks/ride-status")
+    monkeypatch.setattr(main, "SUPERAPP_WEBHOOK_URL", "http://platform.test/api/v1/webhooks/event-status")
     monkeypatch.setattr(main, "SUPERAPP_MINIAPP_ORIGIN", "https://eventbooking-i19e.onrender.com")
 
     captured = {}
@@ -73,9 +79,18 @@ async def test_notify_superapp_posts_signed_callback(monkeypatch):
             return Response()
 
     monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: Client())
-    assert await main.notify_superapp({"booking_id": "EVB-1", "status": "CONFIRMED"}) is True
-    assert captured["url"] == "http://platform.test/api/v1/webhooks/ride-status"
+    cb_body = {
+        "service_code": "EVENT_BOOKING",
+        "operation_id": "event-booking-create-evb-1",
+        "booking_id": "EVB-1",
+        "event_id": "EVT-HN-AI-2026",
+        "status": "CONFIRMED",
+    }
+    assert await main.notify_superapp(cb_body) is True
+    assert captured["url"] == "http://platform.test/api/v1/webhooks/event-status"
     assert captured["headers"]["x-miniapp-origin"] == "https://eventbooking-i19e.onrender.com"
+    assert captured["body"]["operation_id"] == "event-booking-create-evb-1"
+    assert captured["body"]["event_id"] == "EVT-HN-AI-2026"
 
 
 def test_webhook_url_is_configuration_only(monkeypatch):

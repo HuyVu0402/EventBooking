@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from superapp_sdk import GatewaySecurity, build_request_signature_payload
+from superapp_sdk import GatewaySecurity, PartnerResponse, build_request_signature_payload
 
 
 SERVICE_CODE = os.getenv("SERVICE_CODE", "EVENT_BOOKING")
@@ -110,26 +110,27 @@ class CancelBookingRequest(BaseModel):
     customer: Customer | None = Field(None, description="Hồ sơ khách hàng do Super App tự đính kèm")
 
 
+class UpdateBookingRequest(BaseModel):
+    attendee_name: str | None = Field(None, min_length=2, description="Họ tên người tham dự mới")
+    attendee_email: str | None = Field(None, description="Email nhận vé điện tử mới")
+    attendee_phone: str | None = Field(None, min_length=8, max_length=20, description="Số điện thoại liên hệ mới")
+    note: str | None = Field(None, max_length=300, description="Ghi chú mới cho ban tổ chức")
+    customer: Customer | None = Field(None, description="Hồ sơ khách hàng do Super App tự đính kèm")
+
+    @field_validator("attendee_email")
+    @classmethod
+    def validate_optional_attendee_email(cls, value: str | None) -> str | None:
+        if value is not None and "@" not in value:
+            raise ValueError("Email nhận vé điện tử không hợp lệ")
+        return value
+
+
 def success(data: dict[str, Any], message: str, operation_id: str | None = None) -> dict[str, Any]:
-    if operation_id and not OPERATION_ID_PATTERN.fullmatch(operation_id):
-        raise ValueError(f"operation_id không đúng chuẩn Super App SDK: {operation_id}")
-    return PartnerEnvelope(
-        status="success",
-        message=message,
-        operation_id=operation_id,
-        data=data,
-    ).model_dump(exclude_none=True)
+    return PartnerResponse.success(data=data, message=message, operation_id=operation_id)
 
 
 def business_error(message: str, code: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {
-        "status": "failure",
-        "error": {
-            "code": code,
-            "message": message,
-            "details": data or {},
-        },
-    }
+    return PartnerResponse.error(message=message, code=code, details=data)
 
 
 def operation_id_for(action: str, resource_id: str) -> str:
@@ -431,11 +432,13 @@ async def search_events(
     keyword: str | None = Query(None, description="Từ khóa tên hoặc nội dung sự kiện"),
     category: str | None = Query(None, description="Danh mục sự kiện. Giá trị gợi ý: conference | music | expo"),
     start_date: date | None = Query(None, description="Ngày bắt đầu tìm kiếm sự kiện"),
+    min_price: int | None = Query(None, ge=0, description="Giá vé tối thiểu theo VNĐ"),
     max_price: int | None = Query(None, ge=0, description="Giá vé tối đa theo VNĐ"),
 ) -> dict[str, Any]:
     results = []
     for event in EVENTS.values():
-        min_price = min(event["ticket_prices"].values())
+        event_min_price = min(event["ticket_prices"].values())
+        event_max_price = max(event["ticket_prices"].values())
         haystack = f"{event['title']} {event['description']} {event['venue']}".lower()
         event_date = datetime.fromisoformat(event["start_time"]).date()
         if city and city.lower() not in event["city"].lower():
@@ -446,9 +449,11 @@ async def search_events(
             continue
         if start_date and event_date < start_date:
             continue
-        if max_price is not None and min_price > max_price:
+        if min_price is not None and event_max_price < min_price:
             continue
-        results.append({**event, "min_price": min_price})
+        if max_price is not None and event_min_price > max_price:
+            continue
+        results.append({**event, "min_price": event_min_price, "max_price": event_max_price})
     return success({"events": results, "count": len(results)}, "Tìm sự kiện thành công")
 
 
@@ -567,23 +572,24 @@ async def create_booking(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     BOOKINGS[booking_id] = booking
-    event["remaining_tickets"] -= payload.quantity
+    op_id = operation_id_for("create", booking_id)
     response = success(
         booking,
         "Đặt vé thành công, vui lòng mở link thanh toán để hoàn tất",
-        operation_id=operation_id_for("create", booking_id),
+        operation_id=op_id,
     )
     store_idempotency_result(idempotency_key, fingerprint, response)
     await notify_superapp(
         {
             "service_code": SERVICE_CODE,
+            "operation_id": op_id,
             "booking_id": booking_id,
+            "event_id": payload.event_id,
             "status": booking["status"],
             "message": "Đã tạo đơn đặt vé, đang chờ thanh toán.",
         }
     )
     return response
-
 
 @app.get(
     "/bookings/{booking_id}",
@@ -641,8 +647,10 @@ async def cancel_booking(
     booking = BOOKINGS.get(booking_id)
     if not booking:
         return business_error("Không tìm thấy đơn đặt vé", "NOT_FOUND", {"booking_id": booking_id})
+    
+    op_id = operation_id_for("cancel", booking_id)
     if booking["status"] == "CANCELLED":
-        response = success({"booking": booking}, "Đơn vé đã được hủy trước đó", operation_id=operation_id_for("cancel", booking_id))
+        response = success(booking, "Đơn vé đã được hủy trước đó", operation_id=op_id)
         store_idempotency_result(idem_key, fingerprint, response)
         return response
 
@@ -650,14 +658,81 @@ async def cancel_booking(
     booking["cancel_reason"] = payload.reason
     booking["cancelled_at"] = datetime.now(timezone.utc).isoformat()
     EVENTS[booking["event_id"]]["remaining_tickets"] += booking["quantity"]
-    response = success({"booking": booking}, "Hủy đơn đặt vé thành công", operation_id=operation_id_for("cancel", booking_id))
+    response = success(booking, "Hủy đơn đặt vé thành công", operation_id=op_id)
     store_idempotency_result(idem_key, fingerprint, response)
     await notify_superapp(
         {
             "service_code": SERVICE_CODE,
+            "operation_id": op_id,
             "booking_id": booking_id,
+            "event_id": booking["event_id"],
             "status": booking["status"],
             "message": "Đơn đặt vé đã được hủy.",
         }
     )
     return response
+
+
+@app.patch(
+    "/bookings/{booking_id}",
+    operation_id="update_event_booking",
+    summary="Thay đổi thông tin đơn đặt vé sau khi người dùng xác nhận",
+    description="Dùng endpoint này khi người dùng muốn đổi tên, email, số điện thoại hoặc ghi chú cho đơn vé đã đặt.",
+    openapi_extra=superapp_metadata(
+        capability="event.booking.update",
+        side_effect="update",
+        risk_level="high",
+        requires_confirmation=True,
+        idempotency="required",
+    ),
+)
+async def update_booking(
+    payload: UpdateBookingRequest,
+    booking_id: str = Path(..., description="Mã đơn đặt vé cần cập nhật"),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
+    x_api_key: str | None = Header(None, alias="x-api-key"),
+) -> dict[str, Any]:
+    key_error = verify_api_key(x_api_key)
+    if key_error:
+        return key_error
+    idem_key = f"update:{idempotency_key}" if idempotency_key else None
+    if not idem_key:
+        return business_error("Thiếu Idempotency-Key cho thao tác thay đổi thông tin vé", "INVALID_REQUEST")
+    fingerprint = idempotency_fingerprint(
+        "update_booking",
+        {"booking_id": booking_id, **payload.model_dump(mode="json", exclude_none=True)},
+    )
+    previous = idempotency_response(idem_key, fingerprint)
+    if previous:
+        return previous
+
+    booking = BOOKINGS.get(booking_id)
+    if not booking:
+        return business_error("Không tìm thấy đơn đặt vé", "NOT_FOUND", {"booking_id": booking_id})
+    if booking["status"] == "CANCELLED":
+        return business_error("Không thể thay đổi thông tin đơn vé đã bị hủy", "CONFLICT", {"status": "CANCELLED"})
+
+    if payload.attendee_name is not None:
+        booking["attendee_name"] = payload.attendee_name
+    if payload.attendee_email is not None:
+        booking["attendee_email"] = str(payload.attendee_email)
+    if payload.attendee_phone is not None:
+        booking["attendee_phone"] = payload.attendee_phone
+    if payload.note is not None:
+        booking["note"] = payload.note
+
+    op_id = operation_id_for("update", booking_id)
+    response = success(booking, "Cập nhật thông tin đơn vé thành công", operation_id=op_id)
+    store_idempotency_result(idem_key, fingerprint, response)
+    await notify_superapp(
+        {
+            "service_code": SERVICE_CODE,
+            "operation_id": op_id,
+            "booking_id": booking_id,
+            "event_id": booking["event_id"],
+            "status": booking["status"],
+            "message": "Đã cập nhật thông tin đơn đặt vé.",
+        }
+    )
+    return response
+

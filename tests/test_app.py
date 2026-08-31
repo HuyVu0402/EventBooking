@@ -23,6 +23,16 @@ def test_search_events():
     assert body["data"]["events"][0]["event_id"] == "EVT-HN-AI-2026"
 
 
+def test_search_events_by_price_range():
+    response = client.get("/events", params={"min_price": 300000, "max_price": 500000})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    for event in body["data"]["events"]:
+        assert event["min_price"] <= 500000
+        assert event["max_price"] >= 300000
+
+
 def test_create_booking_is_idempotent():
     payload = {
         "event_id": "EVT-HN-AI-2026",
@@ -94,3 +104,55 @@ def test_openapi_has_agent_metadata():
         "requiresConfirmation": True,
         "idempotency": "required",
     }
+
+
+def test_cancel_booking_has_top_level_booking_id():
+    payload = {
+        "event_id": "EVT-HN-AI-2026",
+        "ticket_type": "standard",
+        "quantity": 1,
+        "attendee_name": "Nguyen Van B",
+        "attendee_email": "b@example.com",
+        "attendee_phone": "0912345678",
+    }
+    create_res = client.post("/bookings", json=payload, headers={"Idempotency-Key": "test-create-for-cancel"})
+    booking_id = create_res.json()["data"]["booking_id"]
+
+    cancel_res = client.post(
+        f"/bookings/{booking_id}/cancel",
+        json={"reason": "Ban viec đột xuất"},
+        headers={"Idempotency-Key": "test-cancel-booking"},
+    )
+    body = cancel_res.json()
+    assert cancel_res.status_code == 200
+    assert body["status"] == "success"
+    assert body["operation_id"].startswith("event-booking-cancel-")
+    assert body["data"]["booking_id"] == booking_id
+    assert body["data"]["status"] == "CANCELLED"
+
+
+def test_update_booking_success():
+    payload = {
+        "event_id": "EVT-HN-AI-2026",
+        "ticket_type": "standard",
+        "quantity": 1,
+        "attendee_name": "Nguyen Van C",
+        "attendee_email": "c@example.com",
+        "attendee_phone": "0912345678",
+    }
+    create_res = client.post("/bookings", json=payload, headers={"Idempotency-Key": "test-create-for-update"})
+    booking_id = create_res.json()["data"]["booking_id"]
+
+    update_res = client.patch(
+        f"/bookings/{booking_id}",
+        json={"attendee_name": "Nguyen Van C Updated", "attendee_phone": "0988888888"},
+        headers={"Idempotency-Key": "test-update-booking"},
+    )
+    body = update_res.json()
+    assert update_res.status_code == 200
+    assert body["status"] == "success"
+    assert body["operation_id"].startswith("event-booking-update-")
+    assert body["data"]["booking_id"] == booking_id
+    assert body["data"]["attendee_name"] == "Nguyen Van C Updated"
+    assert body["data"]["attendee_phone"] == "0988888888"
+

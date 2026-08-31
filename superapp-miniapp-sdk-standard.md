@@ -175,8 +175,104 @@ from superapp_sdk import PartnerResponse
 return PartnerResponse.success(
     data={"booking_id": "BOOK-123", "status": "CONFIRMED"},
     message="Đặt lịch thành công",
-    operation_id="event-booking-123",
+operation_id="event-booking-123",
 )
 ```
+
+## 10. Quy trÃ¬nh Ä‘Äƒng kÃ½ vÃ  callback
+
+Partner gá»­i `POST /api/v1/registry/services` kÃ¨m Bearer token vÃ  JSON:
+
+```json
+{
+  "service_code": "EVENT_BOOKING",
+  "name": "Event Booking",
+  "base_url": "https://eventbooking.example.com",
+  "allowed_domains": ["https://eventbooking.example.com"],
+  "callback_event": "event-status"
+}
+```
+
+`callback_event` do Mini App tá»± Ä‘iá»n, pháº£i lÃ  slug chá»¯ thÆ°á»ng káº¿t thÃºc báº±ng
+`-status`, vÃ­ dá»¥ `ride-status`, `event-status`, `health-status`. Response tráº£ vá»:
+
+```json
+{
+  "service_code": "EVENT_BOOKING",
+  "callback_event": "event-status",
+  "callback_url": "https://xspacesuperapp.dpdns.org/api/v1/webhooks/event-status",
+  "approval_status": "draft"
+}
+```
+
+Hostname trong `callback_url` Ä‘Æ°á»£c sinh tá»« `PLATFORM_PUBLIC_URL` cá»§a Super App,
+khÃ´ng hardcode trong Mini App. Production Ä‘áº·t
+`PLATFORM_PUBLIC_URL=https://xspacesuperapp.dpdns.org`; local Ä‘áº·t
+`PLATFORM_PUBLIC_URL=http://localhost:8000`. Callback chá»‰ Ä‘Æ°á»£c cháº¥p nháº­n sau
+khi Admin phÃª duyá»‡t vÃ  cáº¥p credential.
+
+### OpenAPI endpoint
+
+Má»—i mutation pháº£i cÃ³ `operationId`, metadata `x-superapp`, idempotency vÃ  response cÃ³
+`operation_id`:
+
+```yaml
+/bookings:
+  post:
+    operationId: createEventBooking
+    x-superapp:
+      capability: event.booking.create
+      sideEffect: create
+      riskLevel: high
+      requiresConfirmation: true
+      idempotency: required
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [event_id, attendee_name]
+            properties:
+              event_id: {type: string}
+              attendee_name: {type: string}
+```
+
+```json
+{
+  "status": "success",
+  "operation_id": "event-booking-123",
+  "data": {"booking_id": "BOOK-123", "status": "CONFIRMED"}
+}
+```
+
+### Callback JSON vÃ  headers
+
+```http
+POST {callback_url}
+Content-Type: application/json
+X-App-Id: <SUPERAPP_APP_ID>
+X-Key-Id: <SUPERAPP_KEY_ID>
+X-Api-Key: <SUPERAPP_API_KEY>
+X-Miniapp-Origin: https://eventbooking.example.com
+X-Timestamp: <unix-seconds>
+X-Nonce: <unique-value>
+X-Signature: <hmac-sha256>
+```
+
+```json
+{
+  "service_code": "EVENT_BOOKING",
+  "operation_id": "event-booking-123",
+  "booking_id": "BOOK-123",
+  "status": "CONFIRMED",
+  "message": "VÃ© Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c nháº­n",
+  "event_id": "evt-unique-123"
+}
+```
+
+Payload pháº£i cÃ³ `service_code` vÃ  Ã­t nháº¥t má»™t ID Ä‘á»ƒ map vá» chat:
+`booking_id`, `order_id` hoáº·c `ride_id`. Platform tá»« chá»‘i náº¿u sai credential,
+domain, signature, callback event hoáº·c service code.
 
 Nếu `operation_id` sai định dạng, SDK phải reject response trước khi trả về Platform.
