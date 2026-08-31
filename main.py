@@ -28,7 +28,7 @@ SUPERAPP_APP_ID = os.getenv("SUPERAPP_APP_ID", "")
 SUPERAPP_KEY_ID = os.getenv("SUPERAPP_KEY_ID", "")
 SUPERAPP_API_KEY = os.getenv("SUPERAPP_API_KEY", "")
 SUPERAPP_ENVIRONMENT = os.getenv("SUPERAPP_ENVIRONMENT", "sandbox")
-SUPERAPP_WEBHOOK_URL = os.getenv("SUPERAPP_WEBHOOK_URL", "http://localhost:8000/api/v1/webhooks/ride-status")
+SUPERAPP_WEBHOOK_URL = os.getenv("SUPERAPP_WEBHOOK_URL", "")
 SUPERAPP_MINIAPP_ORIGIN = os.getenv("SUPERAPP_MINIAPP_ORIGIN", PUBLIC_BASE_URL.rstrip("/"))
 OPERATION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*-[a-z0-9-]{1,126}$")
 

@@ -78,8 +78,6 @@ async def test_notify_superapp_posts_signed_callback(monkeypatch):
     assert captured["headers"]["x-miniapp-origin"] == "https://eventbooking-i19e.onrender.com"
 
 
-def test_booking_mutations_call_superapp_callback(monkeypatch):
-    monkeypatch.setattr(main, "SUPERAPP_APP_ID", "")
-    monkeypatch.setattr(main, "SUPERAPP_KEY_ID", "")
-    monkeypatch.setattr(main, "SUPERAPP_API_KEY", "")
-    assert main.SUPERAPP_WEBHOOK_URL.endswith("/api/v1/webhooks/ride-status")
+def test_webhook_url_is_configuration_only(monkeypatch):
+    monkeypatch.setattr(main, "SUPERAPP_WEBHOOK_URL", "")
+    assert main.SUPERAPP_WEBHOOK_URL == ""

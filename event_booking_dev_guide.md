@@ -332,7 +332,7 @@ Code mẫu gọi webhook (rút gọn từ `apps/partner-miniapps/mock-suite/rout
 ```python
 import httpx
 
-SUPERAPP_WEBHOOK_URL = os.getenv("SUPERAPP_WEBHOOK_URL", "http://localhost:8000/api/v1/webhooks/ride-status")
+SUPERAPP_WEBHOOK_URL = os.getenv("SUPERAPP_WEBHOOK_URL", "")
 SERVICE_CODE = os.getenv("SERVICE_CODE", "RIDE_001")
 SUPERAPP_API_KEY = os.getenv("SUPERAPP_API_KEY", "")
 
