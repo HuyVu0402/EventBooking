@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import httpx
 import json
 import os
 import re
 from datetime import date, datetime, timezone
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, Path, Query
@@ -13,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
+from superapp_sdk import GatewaySecurity, build_request_signature_payload
 
 
 SERVICE_CODE = os.getenv("SERVICE_CODE", "EVENT_BOOKING")
@@ -25,6 +28,8 @@ SUPERAPP_APP_ID = os.getenv("SUPERAPP_APP_ID", "")
 SUPERAPP_KEY_ID = os.getenv("SUPERAPP_KEY_ID", "")
 SUPERAPP_API_KEY = os.getenv("SUPERAPP_API_KEY", "")
 SUPERAPP_ENVIRONMENT = os.getenv("SUPERAPP_ENVIRONMENT", "sandbox")
+SUPERAPP_WEBHOOK_URL = os.getenv("SUPERAPP_WEBHOOK_URL", "http://localhost:8000/api/v1/webhooks/ride-status")
+SUPERAPP_MINIAPP_ORIGIN = os.getenv("SUPERAPP_MINIAPP_ORIGIN", PUBLIC_BASE_URL.rstrip("/"))
 OPERATION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*-[a-z0-9-]{1,126}$")
 
 
@@ -223,6 +228,50 @@ EVENTS: dict[str, dict[str, Any]] = {
 
 BOOKINGS: dict[str, dict[str, Any]] = {}
 IDEMPOTENCY_RESULTS: dict[str, dict[str, Any]] = {}
+
+
+def build_superapp_callback_headers(
+    body: dict[str, Any],
+    *,
+    nonce: str,
+    timestamp: str,
+) -> dict[str, str]:
+    """Create headers for a signed Mini App callback to Platform API."""
+    path = urlsplit(SUPERAPP_WEBHOOK_URL).path or "/"
+    signed_payload = build_request_signature_payload(
+        app_id=SUPERAPP_APP_ID,
+        key_id=SUPERAPP_KEY_ID,
+        method="POST",
+        path=path,
+        timestamp=timestamp,
+        nonce=nonce,
+        body=body,
+    )
+    return {
+        "x-app-id": SUPERAPP_APP_ID,
+        "x-key-id": SUPERAPP_KEY_ID,
+        "x-api-key": SUPERAPP_API_KEY,
+        "x-miniapp-origin": SUPERAPP_MINIAPP_ORIGIN,
+        "x-timestamp": timestamp,
+        "x-nonce": nonce,
+        "x-signature": GatewaySecurity.generate_signature(SUPERAPP_API_KEY, signed_payload),
+    }
+
+
+async def notify_superapp(body: dict[str, Any]) -> bool:
+    """Push an async status update without failing the original Mini App action."""
+    if not (SUPERAPP_APP_ID and SUPERAPP_KEY_ID and SUPERAPP_API_KEY and SUPERAPP_WEBHOOK_URL):
+        return False
+    timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+    nonce = uuid4().hex
+    headers = build_superapp_callback_headers(body, nonce=nonce, timestamp=timestamp)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(SUPERAPP_WEBHOOK_URL, json=body, headers=headers)
+            response.raise_for_status()
+        return True
+    except httpx.HTTPError:
+        return False
 
 
 def verify_api_key(x_api_key: str | None) -> dict[str, Any] | None:
@@ -525,6 +574,14 @@ async def create_booking(
         operation_id=operation_id_for("create", booking_id),
     )
     store_idempotency_result(idempotency_key, fingerprint, response)
+    await notify_superapp(
+        {
+            "service_code": SERVICE_CODE,
+            "booking_id": booking_id,
+            "status": booking["status"],
+            "message": "Đã tạo đơn đặt vé, đang chờ thanh toán.",
+        }
+    )
     return response
 
 
@@ -595,4 +652,12 @@ async def cancel_booking(
     EVENTS[booking["event_id"]]["remaining_tickets"] += booking["quantity"]
     response = success({"booking": booking}, "Hủy đơn đặt vé thành công", operation_id=operation_id_for("cancel", booking_id))
     store_idempotency_result(idem_key, fingerprint, response)
+    await notify_superapp(
+        {
+            "service_code": SERVICE_CODE,
+            "booking_id": booking_id,
+            "status": booking["status"],
+            "message": "Đơn đặt vé đã được hủy.",
+        }
+    )
     return response
