@@ -5,6 +5,11 @@
     "description": "Mini-app dat ve su kien tich hop Super App. Cac endpoint co OpenAPI metadata de Agent co the tim kiem, uoc tinh gia, dat ve va huy ve.",
     "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "https://eventbooking-i19e.onrender.com"
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
@@ -24,8 +29,18 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.health.read",
+          "sideEffect": "read",
+          "riskLevel": "low",
+          "requiresConfirmation": false,
+          "idempotency": "none"
+        },
         "x-risk-level": "low",
         "x-side-effect-type": "read",
+        "x-requires-hitl": false,
+        "x-idempotency-required": false,
+        "x-retry-policy": "safe_retry",
         "x-timeout-ms": 3000
       }
     },
@@ -152,8 +167,17 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.search",
+          "sideEffect": "read",
+          "riskLevel": "low",
+          "requiresConfirmation": false,
+          "idempotency": "none"
+        },
         "x-risk-level": "low",
         "x-side-effect-type": "read",
+        "x-requires-hitl": false,
+        "x-idempotency-required": false,
         "x-retry-policy": "safe_retry",
         "x-deep-link-template": "https://eventbooking-i19e.onrender.com/"
       }
@@ -200,8 +224,17 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.detail.read",
+          "sideEffect": "read",
+          "riskLevel": "low",
+          "requiresConfirmation": false,
+          "idempotency": "none"
+        },
         "x-risk-level": "low",
         "x-side-effect-type": "read",
+        "x-requires-hitl": false,
+        "x-idempotency-required": false,
         "x-retry-policy": "safe_retry"
       }
     },
@@ -277,8 +310,17 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.ticket.estimate",
+          "sideEffect": "read",
+          "riskLevel": "low",
+          "requiresConfirmation": false,
+          "idempotency": "none"
+        },
         "x-risk-level": "low",
         "x-side-effect-type": "read",
+        "x-requires-hitl": false,
+        "x-idempotency-required": false,
         "x-retry-policy": "safe_retry"
       }
     },
@@ -355,6 +397,13 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.booking.create",
+          "sideEffect": "create",
+          "riskLevel": "high",
+          "requiresConfirmation": true,
+          "idempotency": "required"
+        },
         "x-risk-level": "high",
         "x-side-effect-type": "mutation",
         "x-requires-hitl": true,
@@ -406,8 +455,17 @@
             }
           }
         },
+        "x-superapp": {
+          "capability": "event.booking.status.read",
+          "sideEffect": "read",
+          "riskLevel": "low",
+          "requiresConfirmation": false,
+          "idempotency": "none"
+        },
         "x-risk-level": "low",
         "x-side-effect-type": "read",
+        "x-requires-hitl": false,
+        "x-idempotency-required": false,
         "x-retry-policy": "safe_retry"
       }
     },
@@ -494,6 +552,13 @@
               }
             }
           }
+        },
+        "x-superapp": {
+          "capability": "event.booking.cancel",
+          "sideEffect": "cancel",
+          "riskLevel": "high",
+          "requiresConfirmation": true,
+          "idempotency": "required"
         },
         "x-risk-level": "high",
         "x-side-effect-type": "mutation",
@@ -709,10 +774,5 @@
         "title": "ValidationError"
       }
     }
-  },
-  "servers": [
-    {
-      "url": "https://eventbooking-i19e.onrender.com"
-    }
-  ]
+  }
 }
