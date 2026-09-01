@@ -8,6 +8,9 @@
   "servers": [
     {
       "url": "https://eventbooking-i19e.onrender.com"
+    },
+    {
+      "url": "http://localhost:8501"
     }
   ],
   "paths": {
@@ -124,6 +127,25 @@
             "description": "Ngày bắt đầu tìm kiếm sự kiện"
           },
           {
+            "name": "min_price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Giá vé tối thiểu theo VNĐ",
+              "title": "Min Price"
+            },
+            "description": "Giá vé tối thiểu theo VNĐ"
+          },
+          {
             "name": "max_price",
             "in": "query",
             "required": false,
@@ -179,7 +201,7 @@
         "x-requires-hitl": false,
         "x-idempotency-required": false,
         "x-retry-policy": "safe_retry",
-        "x-deep-link-template": "https://eventbooking-i19e.onrender.com/"
+        "x-deep-link-template": "http://localhost:8501/"
       }
     },
     "/events/{event_id}": {
@@ -410,7 +432,7 @@
         "x-idempotency-required": true,
         "x-retry-policy": "no_retry",
         "x-action-url-field": "data.checkout_url",
-        "x-deep-link-template": "https://eventbooking-i19e.onrender.com/checkout/{booking_id}"
+        "x-deep-link-template": "http://localhost:8501/checkout/{booking_id}"
       }
     },
     "/bookings/{booking_id}": {
@@ -467,6 +489,102 @@
         "x-requires-hitl": false,
         "x-idempotency-required": false,
         "x-retry-policy": "safe_retry"
+      },
+      "patch": {
+        "summary": "Thay đổi thông tin đơn đặt vé sau khi người dùng xác nhận",
+        "description": "Dùng endpoint này khi người dùng muốn đổi tên, email, số điện thoại hoặc ghi chú cho đơn vé đã đặt.",
+        "operationId": "update_event_booking",
+        "parameters": [
+          {
+            "name": "booking_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã đơn đặt vé cần cập nhật",
+              "title": "Booking Id"
+            },
+            "description": "Mã đơn đặt vé cần cập nhật"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Update Event Booking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-superapp": {
+          "capability": "event.booking.update",
+          "sideEffect": "update",
+          "riskLevel": "high",
+          "requiresConfirmation": true,
+          "idempotency": "required"
+        },
+        "x-risk-level": "high",
+        "x-side-effect-type": "mutation",
+        "x-requires-hitl": true,
+        "x-idempotency-required": true,
+        "x-retry-policy": "no_retry"
       }
     },
     "/bookings/{booking_id}/cancel": {
@@ -732,6 +850,75 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "UpdateBookingRequest": {
+        "properties": {
+          "attendee_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Name",
+            "description": "Họ tên người tham dự mới"
+          },
+          "attendee_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Email",
+            "description": "Email nhận vé điện tử mới"
+          },
+          "attendee_phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Phone",
+            "description": "Số điện thoại liên hệ mới"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Ghi chú mới cho ban tổ chức"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Customer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hồ sơ khách hàng do Super App tự đính kèm"
+          }
+        },
+        "type": "object",
+        "title": "UpdateBookingRequest"
       },
       "ValidationError": {
         "properties": {
