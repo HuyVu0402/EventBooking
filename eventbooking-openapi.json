@@ -102,10 +102,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo",
+              "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo | art",
               "title": "Category"
             },
-            "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo"
+            "description": "Danh mục sự kiện. Giá trị gợi ý: conference | music | expo | art"
           },
           {
             "name": "start_date",
@@ -121,10 +121,29 @@
                   "type": "null"
                 }
               ],
-              "description": "Ngày bắt đầu tìm kiếm sự kiện",
+              "description": "Ngày bắt đầu tìm kiếm sự kiện (YYYY-MM-DD)",
               "title": "Start Date"
             },
-            "description": "Ngày bắt đầu tìm kiếm sự kiện"
+            "description": "Ngày bắt đầu tìm kiếm sự kiện (YYYY-MM-DD)"
+          },
+          {
+            "name": "event_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ngày diễn ra sự kiện cụ thể (YYYY-MM-DD)",
+              "title": "Event Date"
+            },
+            "description": "Ngày diễn ra sự kiện cụ thể (YYYY-MM-DD)"
           },
           {
             "name": "min_price",
@@ -684,6 +703,104 @@
         "x-idempotency-required": true,
         "x-retry-policy": "no_retry"
       }
+    },
+    "/bookings/{booking_id}/pay": {
+      "post": {
+        "summary": "Xác nhận thanh toán cho đơn đặt vé",
+        "description": "Dùng endpoint này khi người dùng ấn nút thanh toán hoặc khi nhận callback/thông báo thanh toán thành công.",
+        "operationId": "pay_event_booking",
+        "parameters": [
+          {
+            "name": "booking_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mã đơn đặt vé cần thanh toán",
+              "title": "Booking Id"
+            },
+            "description": "Mã đơn đặt vé cần thanh toán"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Pay Event Booking"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-superapp": {
+          "capability": "event.booking.pay",
+          "sideEffect": "payment",
+          "riskLevel": "high",
+          "requiresConfirmation": true,
+          "idempotency": "required"
+        },
+        "x-risk-level": "high",
+        "x-side-effect-type": "mutation",
+        "x-requires-hitl": true,
+        "x-idempotency-required": true,
+        "x-retry-policy": "no_retry"
+      }
     }
   },
   "components": {
@@ -850,6 +967,36 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "PayRequest": {
+        "properties": {
+          "payment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method",
+            "description": "Phương thức thanh toán. Giá trị hợp lệ: SUPERAPP_PAY | MOMO | ZALOPAY | BANK_QR | CARD",
+            "default": "SUPERAPP_PAY"
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Customer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hồ sơ khách hàng do Super App tự đính kèm"
+          }
+        },
+        "type": "object",
+        "title": "PayRequest"
       },
       "UpdateBookingRequest": {
         "properties": {

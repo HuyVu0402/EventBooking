@@ -156,3 +156,70 @@ def test_update_booking_success():
     assert body["data"]["attendee_name"] == "Nguyen Van C Updated"
     assert body["data"]["attendee_phone"] == "0988888888"
 
+
+def test_search_events_by_specific_date():
+    response = client.get("/events", params={"event_date": "2026-09-02"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["data"]["count"] == 1
+    assert body["data"]["events"][0]["event_id"] == "EVT-HN-AI-2026"
+
+
+def test_pay_booking_success():
+    payload = {
+        "event_id": "EVT-HN-AI-2026",
+        "ticket_type": "standard",
+        "quantity": 1,
+        "attendee_name": "Nguyen Van Pay",
+        "attendee_email": "pay@example.com",
+        "attendee_phone": "0912345678",
+    }
+    create_res = client.post("/bookings", json=payload, headers={"Idempotency-Key": "test-create-for-pay"})
+    booking_id = create_res.json()["data"]["booking_id"]
+    assert create_res.json()["data"]["status"] == "PENDING_PAYMENT"
+
+    pay_res = client.post(
+        f"/bookings/{booking_id}/pay",
+        json={"payment_method": "SUPERAPP_PAY"},
+        headers={"Idempotency-Key": "test-pay-booking"},
+    )
+    body = pay_res.json()
+    assert pay_res.status_code == 200
+    assert body["status"] == "success"
+    assert body["operation_id"].startswith("event-booking-pay-")
+    assert body["data"]["booking_id"] == booking_id
+    assert body["data"]["status"] == "PAID"
+    assert body["data"]["payment_method"] == "SUPERAPP_PAY"
+    assert "paid_at" in body["data"]
+
+
+def test_pay_cancelled_booking_fails():
+    payload = {
+        "event_id": "EVT-HN-AI-2026",
+        "ticket_type": "standard",
+        "quantity": 1,
+        "attendee_name": "Nguyen Van CancelPay",
+        "attendee_email": "cancelpay@example.com",
+        "attendee_phone": "0912345678",
+    }
+    create_res = client.post("/bookings", json=payload, headers={"Idempotency-Key": "test-create-cancel-pay"})
+    booking_id = create_res.json()["data"]["booking_id"]
+
+    client.post(
+        f"/bookings/{booking_id}/cancel",
+        json={"reason": "Hủy đơn"},
+        headers={"Idempotency-Key": "test-cancel-before-pay"},
+    )
+
+    pay_res = client.post(
+        f"/bookings/{booking_id}/pay",
+        json={"payment_method": "SUPERAPP_PAY"},
+        headers={"Idempotency-Key": "test-pay-cancelled"},
+    )
+    body = pay_res.json()
+    assert pay_res.status_code == 200
+    assert body["status"] == "failure"
+    assert body["error"]["code"] == "CONFLICT"
+
+

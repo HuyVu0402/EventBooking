@@ -125,6 +125,15 @@ class UpdateBookingRequest(BaseModel):
         return value
 
 
+class PayRequest(BaseModel):
+    payment_method: str | None = Field(
+        "SUPERAPP_PAY",
+        description="Phương thức thanh toán. Giá trị hợp lệ: SUPERAPP_PAY | MOMO | ZALOPAY | BANK_QR | CARD",
+    )
+    customer: Customer | None = Field(None, description="Hồ sơ khách hàng do Super App tự đính kèm")
+
+
+
 def success(data: dict[str, Any], message: str, operation_id: str | None = None) -> dict[str, Any]:
     return PartnerResponse.success(data=data, message=message, operation_id=operation_id)
 
@@ -167,7 +176,7 @@ def store_idempotency_result(key: str, fingerprint: str, response: dict[str, Any
 def superapp_metadata(
     *,
     capability: str,
-    side_effect: Literal["read", "create", "cancel"],
+    side_effect: Literal["read", "create", "update", "cancel", "payment"],
     risk_level: Literal["low", "high"],
     requires_confirmation: bool,
     idempotency: Literal["none", "required"],
@@ -198,7 +207,7 @@ EVENTS: dict[str, dict[str, Any]] = {
         "category": "conference",
         "city": "Hà Nội",
         "venue": "Trung tâm Hội nghị Quốc gia",
-        "start_time": "2026-09-18T09:00:00+07:00",
+        "start_time": "2026-09-02T09:00:00+07:00",
         "description": "Hội nghị về ứng dụng AI trong sản phẩm, vận hành và giáo dục.",
         "ticket_prices": {"standard": 450000, "vip": 1200000, "student": 250000},
         "remaining_tickets": 120,
@@ -209,7 +218,7 @@ EVENTS: dict[str, dict[str, Any]] = {
         "category": "music",
         "city": "TP. Hồ Chí Minh",
         "venue": "Nhà Văn hóa Thanh Niên",
-        "start_time": "2026-10-03T19:30:00+07:00",
+        "start_time": "2026-09-03T19:30:00+07:00",
         "description": "Đêm nhạc indie với các nghệ sĩ trẻ và khu trải nghiệm đồ ăn nhẹ.",
         "ticket_prices": {"standard": 300000, "vip": 800000, "student": 180000},
         "remaining_tickets": 80,
@@ -220,10 +229,32 @@ EVENTS: dict[str, dict[str, Any]] = {
         "category": "expo",
         "city": "Đà Nẵng",
         "venue": "Cung Hội nghị Quốc tế Ariyana",
-        "start_time": "2026-11-12T08:30:00+07:00",
+        "start_time": "2026-09-04T08:30:00+07:00",
         "description": "Triển lãm startup, pitching, networking và khu tuyển dụng công nghệ.",
         "ticket_prices": {"standard": 200000, "vip": 650000, "student": 120000},
         "remaining_tickets": 200,
+    },
+    "EVT-HCM-TECH-2026": {
+        "event_id": "EVT-HCM-TECH-2026",
+        "title": "Saigon Tech Summit 2026",
+        "category": "conference",
+        "city": "TP. Hồ Chí Minh",
+        "venue": "Gem Center",
+        "start_time": "2026-09-05T14:00:00+07:00",
+        "description": "Hội thảo công nghệ phần mềm, điện toán đám mây và kết nối đầu tư.",
+        "ticket_prices": {"standard": 350000, "vip": 950000, "student": 200000},
+        "remaining_tickets": 150,
+    },
+    "EVT-HN-ART-2026": {
+        "event_id": "EVT-HN-ART-2026",
+        "title": "Hanoi Contemporary Art Fair",
+        "category": "art",
+        "city": "Hà Nội",
+        "venue": "Bảo tàng Mỹ thuật Việt Nam",
+        "start_time": "2026-09-06T18:00:00+07:00",
+        "description": "Triển lãm nghệ thuật đương đại, không gian sáng tạo và giao lưu nghệ sĩ.",
+        "ticket_prices": {"standard": 150000, "vip": 500000, "student": 100000},
+        "remaining_tickets": 90,
     },
 }
 
@@ -287,85 +318,245 @@ def build_checkout_url(booking_id: str) -> str:
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def home() -> str:
-    return """
-<!doctype html>
+    return r"""<!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Event Booking</title>
+  <title>Event Booking Mini App</title>
   <style>
-    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; }
-    body { margin: 0; background: #f7f8fb; color: #172033; }
-    header { padding: 28px 24px; background: #ffffff; border-bottom: 1px solid #e3e7ef; }
-    main { max-width: 1040px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
-    h1 { margin: 0 0 6px; font-size: 28px; }
-    h2 { margin: 0 0 12px; font-size: 18px; }
+    :root { font-family: Inter, Arial, sans-serif; color: #172033; background: #f7f8fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: linear-gradient(120deg, #1769e0, #0f4cb3); color: white; padding: 24px 20px; }
+    header div, main { max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    .muted { color: #66748a; }
+    main { padding: 20px; display: grid; gap: 18px; }
+    .panel, .card { background: #ffffff; border: 1px solid #e3e7ef; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-    .card, form { background: #fff; border: 1px solid #e3e7ef; border-radius: 8px; padding: 16px; }
+    .tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #e3e7ef; color: #33415c; }
+    .tag.warning { background: #fff8e6; color: #b7791f; border: 1px solid #f6e05e; }
+    .tag.success { background: #e6fffa; color: #234e52; border: 1px solid #81e6d9; }
+    .tag.danger { background: #ffe3e3; color: #9b1c1c; border: 1px solid #feb2b2; }
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
     label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: #33415c; }
     input, select, button { height: 40px; border-radius: 6px; border: 1px solid #cfd6e4; padding: 0 10px; font: inherit; }
-    button { background: #1769e0; color: white; border-color: #1769e0; cursor: pointer; font-weight: 700; }
-    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: end; }
-    .muted { color: #66748a; }
+    button { background: #1769e0; color: white; border: 0; cursor: pointer; font-weight: 700; border-radius: 6px; }
+    button.secondary { background: #47637d; }
+    button.danger { background: #c23b3b; }
     .price { font-weight: 700; color: #0f7b56; }
-    pre { white-space: pre-wrap; background: #101828; color: #f7f8fb; border-radius: 8px; padding: 14px; overflow: auto; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .pay-banner { background: #fff8e6; border: 1px solid #f6e05e; padding: 14px; border-radius: 8px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .pay-banner.success { background: #e6fffa; border-color: #319795; }
+    pre { white-space: pre-wrap; background: #101828; color: #f7f8fb; border-radius: 8px; padding: 14px; overflow: auto; max-height: 300px; }
+    .search-box { display: flex; gap: 10px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Event Booking</h1>
-    <div class="muted">Mini-app đặt vé sự kiện cho Super App</div>
+    <div>
+      <h1>Event Booking Mini App</h1>
+      <span>Hệ thống đặt vé sự kiện, quản lý đơn vé và thanh toán tích hợp Super App</span>
+    </div>
   </header>
   <main>
-    <section>
-      <h2>Sự kiện</h2>
+    <section class="panel">
+      <h2>1. Danh sách Sự kiện (Bắt đầu từ 02/09/2026)</h2>
       <div id="events" class="grid"></div>
     </section>
-    <section>
-      <h2>Đặt vé nhanh</h2>
+
+    <section class="panel">
+      <h2>2. Đặt vé nhanh</h2>
       <form id="bookingForm">
-        <label>Mã sự kiện <input name="event_id" required value="EVT-HN-AI-2026" /></label>
+        <label>Sự kiện
+          <select name="event_id" id="eventSelect" required></select>
+        </label>
         <label>Loại vé
-          <select name="ticket_type"><option value="standard">standard</option><option value="vip">vip</option><option value="student">student</option></select>
+          <select name="ticket_type" id="ticketTypeSelect"><option value="standard">Standard</option><option value="vip">VIP</option><option value="student">Student</option></select>
         </label>
         <label>Số lượng <input name="quantity" type="number" min="1" max="10" required value="1" /></label>
-        <label>Họ tên <input name="attendee_name" required value="Nguyen Van A" /></label>
+        <label>Họ tên <input name="attendee_name" required value="Nguyễn Văn A" /></label>
         <label>Email <input name="attendee_email" type="email" required value="a@example.com" /></label>
         <label>Điện thoại <input name="attendee_phone" required value="0912345678" /></label>
-        <button type="submit">Đặt vé</button>
+        <button type="submit">Đặt vé ngay</button>
       </form>
     </section>
+
+    <section class="panel">
+      <h2>3. Đơn đặt vé hiện tại & Thanh toán</h2>
+      <div id="bookingBox" class="muted">Chưa chọn đơn vé nào. Hãy đặt vé hoặc nhập mã đơn vé bên dưới.</div>
+    </section>
+
+    <section class="panel">
+      <h2>4. Tra cứu đơn đặt vé</h2>
+      <div class="search-box">
+        <input id="searchBookingId" placeholder="Nhập mã đơn vé (VD: EVB-...)" style="flex:1;">
+        <button type="button" onclick="searchBooking()">Tra cứu</button>
+      </div>
+    </section>
+
     <section>
-      <h2>Kết quả</h2>
-      <pre id="output">Chưa có thao tác.</pre>
+      <h2>Kết quả API Response</h2>
+      <pre id="output">Sẵn sàng.</pre>
     </section>
   </main>
   <script>
+    const state = { booking: null };
     const output = document.querySelector('#output');
-    async function loadEvents() {
-      const res = await fetch('/events');
+    const eventSelect = document.querySelector('#eventSelect');
+
+    async function api(url, options) {
+      const res = await fetch(url, options);
       const body = await res.json();
-      document.querySelector('#events').innerHTML = body.data.events.map(event => `
-        <article class="card">
-          <h3>${event.title}</h3>
-          <p class="muted">${event.city} · ${event.venue}</p>
-          <p>${event.description}</p>
-          <p class="price">Từ ${event.min_price.toLocaleString('vi-VN')} VND</p>
-        </article>
-      `).join('');
+      const method = (options?.method || 'GET').toUpperCase();
+      if (method !== 'GET') output.textContent = JSON.stringify(body, null, 2);
+      return body;
     }
-    document.querySelector('#bookingForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const payload = Object.fromEntries(new FormData(event.target).entries());
+
+    async function loadEvents() {
+      const body = await api('/events');
+      if (body.status === 'success') {
+        const events = body.data.events;
+        eventSelect.innerHTML = events.map(e => `<option value="${e.event_id}">${e.title} (${e.city})</option>`).join('');
+        document.querySelector('#events').innerHTML = events.map(e => {
+          const dateStr = new Date(e.start_time).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+          return `
+            <article class="card">
+              <span class="tag">${e.category}</span>
+              <h3>${e.title}</h3>
+              <p class="muted">📍 ${e.city} · ${e.venue}</p>
+              <p>⏰ <b>${dateStr}</b></p>
+              <p>${e.description}</p>
+              <p class="price">Giá từ ${e.min_price.toLocaleString('vi-VN')} VNĐ</p>
+            </article>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderBooking() {
+      if (!state.booking) {
+        document.querySelector('#bookingBox').innerHTML = 'Chưa chọn đơn vé nào.';
+        return;
+      }
+      const b = state.booking;
+      const isUnpaid = b.status === 'PENDING_PAYMENT';
+      const isPaid = b.status === 'PAID';
+
+      let statusBadge = `<span class="tag">${b.status}</span>`;
+      if (isUnpaid) statusBadge = `<span class="tag warning">Chờ thanh toán</span>`;
+      if (isPaid) statusBadge = `<span class="tag success">Đã thanh toán thành công</span>`;
+      if (b.status === 'CANCELLED') statusBadge = `<span class="tag danger">Đã hủy đơn vé</span>`;
+
+      let payBanner = '';
+      if (isUnpaid) {
+        payBanner = `
+          <div class="pay-banner">
+            <div><b>Chờ thanh toán:</b> Vui lòng thanh toán số tiền <b>${(b.total_amount || 0).toLocaleString('vi-VN')} VNĐ</b> để nhận vé.</div>
+            <button onclick="payBooking()">Thanh toán ngay</button>
+          </div>
+        `;
+      } else if (isPaid) {
+        payBanner = `
+          <div class="pay-banner success">
+            <div><b>Đã thanh toán thành công!</b> Phương thức: <b>${b.payment_method || 'SUPERAPP_PAY'}</b></div>
+            <a href="/checkout/${b.booking_id}" target="_blank" style="color:#0f4cb3;font-weight:700;">Xem vé điện tử</a>
+          </div>
+        `;
+      }
+
+      document.querySelector('#bookingBox').innerHTML = `
+        <div class="card">
+          <h3>Đơn vé: ${b.booking_id}</h3>
+          <p><b>Trạng thái:</b> ${statusBadge}</p>
+          <p><b>Sự kiện:</b> ${b.event_title}</p>
+          <p><b>Người tham dự:</b> ${b.attendee_name} (${b.attendee_email} · ${b.attendee_phone})</p>
+          <p><b>Loại vé:</b> ${b.ticket_type} x ${b.quantity} vé</p>
+          <p><b>Tổng tiền:</b> <span class="price">${(b.total_amount || 0).toLocaleString('vi-VN')} VNĐ</span></p>
+          ${payBanner}
+          ${b.status !== 'CANCELLED' ? `
+            <div class="actions">
+              ${isUnpaid ? `<button onclick="payBooking()">Thanh toán ngay</button>` : ''}
+              <a href="/checkout/${b.booking_id}" target="_blank"><button class="secondary" type="button">Trang thanh toán Deep Link</button></a>
+              <button class="secondary" onclick="updateBookingInfo()">Cập nhật thông tin</button>
+              <button class="danger" onclick="cancelBooking()">Hủy đơn vé</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    document.querySelector('#bookingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(e.target).entries());
       payload.quantity = Number(payload.quantity);
-      const res = await fetch('/bookings', {
+      const body = await api('/bookings', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID()},
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
         body: JSON.stringify(payload)
       });
-      output.textContent = JSON.stringify(await res.json(), null, 2);
+      if (body.status === 'success') {
+        state.booking = body.data;
+        renderBooking();
+      }
     });
+
+    async function payBooking() {
+      if (!state.booking) return;
+      const body = await api(`/bookings/${state.booking.booking_id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ payment_method: 'SUPERAPP_PAY' })
+      });
+      if (body.status === 'success') {
+        state.booking = body.data;
+        renderBooking();
+      }
+    }
+
+    async function cancelBooking() {
+      if (!state.booking || !confirm('Bạn chắc chắn muốn hủy đơn vé này?')) return;
+      const body = await api(`/bookings/${state.booking.booking_id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ reason: 'Người dùng hủy trên giao diện demo' })
+      });
+      if (body.status === 'success') {
+        state.booking = body.data;
+        renderBooking();
+      }
+    }
+
+    async function updateBookingInfo() {
+      if (!state.booking) return;
+      const newName = prompt("Họ tên người tham dự mới:", state.booking.attendee_name);
+      const newPhone = prompt("Số điện thoại mới:", state.booking.attendee_phone);
+      const payload = {};
+      if (newName) payload.attendee_name = newName;
+      if (newPhone) payload.attendee_phone = newPhone;
+
+      const body = await api(`/bookings/${state.booking.booking_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify(payload)
+      });
+      if (body.status === 'success') {
+        state.booking = body.data;
+        renderBooking();
+      }
+    }
+
+    async function searchBooking() {
+      const q = document.querySelector('#searchBookingId').value.trim();
+      if (!q) return;
+      const body = await api(`/bookings/${encodeURIComponent(q)}`);
+      if (body.status === 'success' && body.data) {
+        state.booking = body.data;
+        renderBooking();
+      }
+    }
+
     loadEvents();
   </script>
 </body>
@@ -379,11 +570,104 @@ async def checkout_page(booking_id: str) -> str:
     if not booking:
         return "<h1>Không tìm thấy đơn vé</h1>"
     amount = f"{booking['total_amount']:,}".replace(",", ".")
+    is_paid = booking.get("status") == "PAID"
+    is_cancelled = booking.get("status") == "CANCELLED"
+
     return f"""
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Thanh toán vé</title>
-<style>body{{font-family:Arial,sans-serif;margin:40px;max-width:720px}}.box{{border:1px solid #ddd;border-radius:8px;padding:20px}}button{{padding:12px 18px;background:#1769e0;color:#fff;border:0;border-radius:6px}}</style>
-</head><body><div class="box"><h1>Thanh toán vé</h1><p>Mã đơn: <b>{booking_id}</b></p><p>Sự kiện: {booking['event_title']}</p><p>Tổng tiền: <b>{amount} VND</b></p><button>Thanh toán demo</button></div></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thanh toán đơn vé - {booking_id}</title>
+  <style>
+    body {{ font-family: Inter, Arial, sans-serif; margin: 0; background: #f4f6fa; color: #1a202c; padding: 20px; }}
+    .box {{ max-width: 600px; margin: 20px auto; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
+    h1 {{ margin-top: 0; color: #1769e0; font-size: 24px; }}
+    .info-item {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #edf2f7; }}
+    .info-item:last-child {{ border-bottom: none; }}
+    .label {{ color: #718096; font-size: 14px; }}
+    .value {{ font-weight: 600; font-size: 14px; text-align: right; }}
+    .price-tag {{ color: #0f7b56; font-size: 20px; font-weight: 700; }}
+    .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 13px; }}
+    .badge-success {{ background: #c6f6d5; color: #22543d; }}
+    .badge-warning {{ background: #feebc8; color: #744210; }}
+    .badge-danger {{ background: #fed7d7; color: #742a2a; }}
+    .methods {{ display: grid; gap: 10px; margin: 16px 0; }}
+    .method-option {{ border: 1px solid #cbd5e0; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }}
+    .method-option input {{ margin: 0; }}
+    button {{ width: 100%; padding: 14px; background: #1769e0; color: white; border: 0; border-radius: 8px; font-weight: 700; font-size: 16px; cursor: pointer; margin-top: 16px; }}
+    button:disabled {{ background: #a0aec0; cursor: not-allowed; }}
+    .alert {{ padding: 12px; border-radius: 8px; margin-top: 14px; font-weight: 600; text-align: center; }}
+    .alert-success {{ background: #c6f6d5; color: #22543d; }}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Cổng Thanh toán Vé Sự kiện</h1>
+    <div style="margin-bottom: 20px;">
+      Status: {'<span class="badge badge-success">Đã thanh toán</span>' if is_paid else ('<span class="badge badge-danger">Đã hủy đơn vé</span>' if is_cancelled else '<span class="badge badge-warning">Chờ thanh toán</span>')}
+    </div>
+
+    <div class="info-item">
+      <span class="label">Mã đơn vé:</span>
+      <span class="value"><b>{booking_id}</b></span>
+    </div>
+    <div class="info-item">
+      <span class="label">Sự kiện:</span>
+      <span class="value">{booking['event_title']}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Người tham dự:</span>
+      <span class="value">{booking['attendee_name']} ({booking['attendee_phone']})</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Loại vé / Số lượng:</span>
+      <span class="value">{booking['ticket_type']} x {booking['quantity']} vé</span>
+    </div>
+    <div class="info-item">
+      <span class="label">Tổng tiền thanh toán:</span>
+      <span class="value price-tag">{amount} VNĐ</span>
+    </div>
+
+    {'<div class="alert alert-success">Vé đã được thanh toán thành công vào ' + str(booking.get("paid_at", "")) + '</div>' if is_paid else ''}
+
+    {"" if is_paid or is_cancelled else f'''
+    <h3 style="margin-top:20px;font-size:16px;">Chọn phương thức thanh toán:</h3>
+    <div class="methods">
+      <label class="method-option"><input type="radio" name="pay_method" value="SUPERAPP_PAY" checked> Ví SuperApp Pay</label>
+      <label class="method-option"><input type="radio" name="pay_method" value="BANK_QR"> Chuyển khoản QR Banking (VietQR)</label>
+      <label class="method-option"><input type="radio" name="pay_method" value="MOMO"> Ví MoMo</label>
+      <label class="method-option"><input type="radio" name="pay_method" value="CARD"> Thẻ ATM / VISA / Mastercard</label>
+    </div>
+    <button id="payBtn" onclick="confirmPayment()">Xác nhận thanh toán ngay ({amount} VNĐ)</button>
+    '''}
+  </div>
+
+  <script>
+    async function confirmPayment() {{
+      const btn = document.querySelector('#payBtn');
+      if (btn) btn.disabled = true;
+      const selected = document.querySelector('input[name="pay_method"]:checked')?.value || 'SUPERAPP_PAY';
+      const res = await fetch('/bookings/{booking_id}/pay', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() }},
+        body: JSON.stringify({{ payment_method: selected }})
+      }});
+      const data = await res.json();
+      if (data.status === 'success') {{
+        alert('Thanh toán đơn vé thành công!');
+        window.location.reload();
+      }} else {{
+        alert('Thanh toán thất bại: ' + data.message);
+        if (btn) btn.disabled = false;
+      }}
+    }}
+  </script>
+</body>
+</html>
 """
+
 
 
 @app.get(
@@ -430,8 +714,9 @@ async def health() -> dict[str, Any]:
 async def search_events(
     city: str | None = Query(None, description="Thành phố tổ chức sự kiện (VD: Hà Nội, TP. Hồ Chí Minh, Đà Nẵng)"),
     keyword: str | None = Query(None, description="Từ khóa tên hoặc nội dung sự kiện"),
-    category: str | None = Query(None, description="Danh mục sự kiện. Giá trị gợi ý: conference | music | expo"),
-    start_date: date | None = Query(None, description="Ngày bắt đầu tìm kiếm sự kiện"),
+    category: str | None = Query(None, description="Danh mục sự kiện. Giá trị gợi ý: conference | music | expo | art"),
+    start_date: date | None = Query(None, description="Ngày bắt đầu tìm kiếm sự kiện (YYYY-MM-DD)"),
+    event_date: date | None = Query(None, description="Ngày diễn ra sự kiện cụ thể (YYYY-MM-DD)"),
     min_price: int | None = Query(None, ge=0, description="Giá vé tối thiểu theo VNĐ"),
     max_price: int | None = Query(None, ge=0, description="Giá vé tối đa theo VNĐ"),
 ) -> dict[str, Any]:
@@ -440,14 +725,16 @@ async def search_events(
         event_min_price = min(event["ticket_prices"].values())
         event_max_price = max(event["ticket_prices"].values())
         haystack = f"{event['title']} {event['description']} {event['venue']}".lower()
-        event_date = datetime.fromisoformat(event["start_time"]).date()
+        ev_date = datetime.fromisoformat(event["start_time"]).date()
         if city and city.lower() not in event["city"].lower():
             continue
         if keyword and keyword.lower() not in haystack:
             continue
         if category and category.lower() != event["category"].lower():
             continue
-        if start_date and event_date < start_date:
+        if start_date and ev_date < start_date:
+            continue
+        if event_date and ev_date != event_date:
             continue
         if min_price is not None and event_max_price < min_price:
             continue
@@ -732,6 +1019,65 @@ async def update_booking(
             "event_id": booking["event_id"],
             "status": booking["status"],
             "message": "Đã cập nhật thông tin đơn đặt vé.",
+        }
+    )
+    return response
+
+
+@app.post(
+    "/bookings/{booking_id}/pay",
+    operation_id="pay_event_booking",
+    summary="Xác nhận thanh toán cho đơn đặt vé",
+    description="Dùng endpoint này khi người dùng ấn nút thanh toán hoặc khi nhận callback/thông báo thanh toán thành công.",
+    openapi_extra=superapp_metadata(
+        capability="event.booking.pay",
+        side_effect="payment",
+        risk_level="high",
+        requires_confirmation=True,
+        idempotency="required",
+    ),
+)
+async def pay_booking(
+    payload: PayRequest,
+    booking_id: str = Path(..., description="Mã đơn đặt vé cần thanh toán"),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
+    x_api_key: str | None = Header(None, alias="x-api-key"),
+) -> dict[str, Any]:
+    key_error = verify_api_key(x_api_key)
+    if key_error:
+        return key_error
+    idem_key = f"pay:{idempotency_key}" if idempotency_key else None
+    if not idem_key:
+        return business_error("Thiếu Idempotency-Key cho thao tác thanh toán vé", "INVALID_REQUEST")
+    fingerprint = idempotency_fingerprint(
+        "pay_booking",
+        {"booking_id": booking_id, **payload.model_dump(mode="json", exclude_none=True)},
+    )
+    previous = idempotency_response(idem_key, fingerprint)
+    if previous:
+        return previous
+
+    booking = BOOKINGS.get(booking_id)
+    if not booking:
+        return business_error("Không tìm thấy đơn đặt vé", "NOT_FOUND", {"booking_id": booking_id})
+    if booking["status"] == "CANCELLED":
+        return business_error("Đơn vé đã bị hủy, không thể thanh toán", "CONFLICT", {"status": "CANCELLED"})
+
+    booking["status"] = "PAID"
+    booking["payment_method"] = payload.payment_method or "SUPERAPP_PAY"
+    booking["paid_at"] = datetime.now(timezone.utc).isoformat()
+
+    op_id = operation_id_for("pay", booking_id)
+    response = success(booking, "Thanh toán đơn vé thành công", operation_id=op_id)
+    store_idempotency_result(idem_key, fingerprint, response)
+    await notify_superapp(
+        {
+            "service_code": SERVICE_CODE,
+            "operation_id": op_id,
+            "booking_id": booking_id,
+            "event_id": booking["event_id"],
+            "status": "PAID",
+            "message": "Đã hoàn tất thanh toán đơn đặt vé.",
         }
     )
     return response
